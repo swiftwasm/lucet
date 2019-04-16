@@ -1,9 +1,31 @@
 use crate::{
     globals::GlobalSpec,
     linear_memory::{HeapSpec, LinearMemorySpec, SparseData},
+    functions::FunctionSpec,
     Error,
 };
 use serde::{Deserialize, Serialize};
+
+pub struct Object<'a> {
+    module_data: ModuleData<'a>,
+    functions: &'a [FunctionSpec],
+}
+
+impl <'a> Object<'a> {
+    pub fn new(module_data: ModuleData<'a>, functions: &'a [FunctionSpec]) -> Self {
+        Self { module_data, functions }
+    }
+
+    pub fn function_index_for(&self, rip: u64) -> Option<usize> {
+        for (idx, function) in self.functions.iter().enumerate() {
+            if function.contains(rip) {
+                // Assume functions do not overlap
+                return Some(idx);
+            }
+        }
+        None
+    }
+}
 
 /// The metadata (and some data) for a Lucet module.
 ///

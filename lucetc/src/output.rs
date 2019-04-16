@@ -1,3 +1,4 @@
+use crate::function::write_function_manifest;
 use crate::name::Name;
 use crate::stack_probe;
 use crate::traps::write_trap_manifest;
@@ -43,6 +44,15 @@ impl ObjectFile {
         let trap_manifest = &product
             .trap_manifest
             .expect("trap manifest will be present");
+
+        // TODO: at this moment there is no way to get a full list of functions and sizes
+        // at this point in compilation.
+        //
+        // For now, we need the list of functions with traps, which we can get here, and
+        // reuse that when writing out the trap manifest. When a full function list is
+        // available, `write_function_manifest` should take the function manifest, rather
+        // than compute it
+        let function_manifest = write_function_manifest(trap_manifest, &mut product.artifact)?;
         write_trap_manifest(trap_manifest, &mut product.artifact)?;
         Ok(Self {
             artifact: product.artifact,

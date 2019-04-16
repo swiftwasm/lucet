@@ -4,7 +4,7 @@ use crate::module::{
 };
 use libc::c_void;
 use libloading::{Library, Symbol};
-use lucet_module_data::ModuleData;
+use lucet_module_data::{FunctionSpec, ModuleData};
 use std::ffi::CStr;
 use std::mem;
 use std::path::Path;
@@ -23,6 +23,8 @@ pub struct DlModule {
     module_data: ModuleData<'static>,
 
     trap_manifest: &'static [TrapManifestRecord],
+
+    function_manifest: &'static [FunctionSpec],
 }
 
 // for the one raw pointer only
@@ -71,6 +73,40 @@ impl DlModule {
             std::ptr::null()
         };
 
+        /*
+         * TODO: load up the function manifest
+         */
+        let function_manifest = unsafe {
+            let manifest_len_ptr = lib.get::<*const u32>(b"lucet_function_manifest_len");
+            let manifest_ptr = lib.get::<*const FunctionSpec>(b"lucet_function_manifest");
+
+            match (manifest_ptr, manifest_len_ptr) {
+                (Ok(ptr), Ok(len_ptr)) => {
+                    let manifest_len = len_ptr.as_ref().ok_or(lucet_incorrect_module!(
+                        "`lucet_function_manifest_len` is defined but null"
+                    ))?;
+                    let manifest = ptr.as_ref().ok_or(lucet_incorrect_module!(
+                        "`lucet_function_manifest` is defined but null"
+                    ))?;
+
+                    from_raw_parts(manifest, *manifest_len as usize)
+                }
+                (Err(_), Err(_)) => &[],
+                (Ok(_), Err(e)) => {
+                    return Err(lucet_incorrect_module!(
+                        "error loading symbol `lucet_function_manifest_len`: {}",
+                        e
+                    ));
+                }
+                (Err(e), Ok(_)) => {
+                    return Err(lucet_incorrect_module!(
+                        "error loading symbol `lucet_function_manifest`: {}",
+                        e
+                    ));
+                }
+            }
+        };
+
         let trap_manifest = unsafe {
             if let Ok(len_ptr) = lib.get::<*const u32>(b"lucet_trap_manifest_len") {
                 let len = len_ptr.as_ref().ok_or(lucet_incorrect_module!(
@@ -96,6 +132,7 @@ impl DlModule {
             fbase,
             module_data,
             trap_manifest,
+            function_manifest,
         }))
     }
 }
