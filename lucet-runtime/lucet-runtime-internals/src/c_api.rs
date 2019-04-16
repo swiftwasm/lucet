@@ -196,7 +196,7 @@ pub mod lucet_state {
     use crate::c_api::lucet_val;
     use crate::instance::{State, TerminationDetails};
     use crate::module::AddrDetails;
-    use crate::trapcode::{TrapCode};
+    use crate::trapcode::TrapCode;
     use libc::{c_char, c_void};
     use num_derive::FromPrimitive;
     use std::ffi::CString;
