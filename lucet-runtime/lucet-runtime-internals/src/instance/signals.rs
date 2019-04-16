@@ -2,10 +2,10 @@ use crate::context::Context;
 use crate::instance::{
     FaultDetails, Instance, State, TerminationDetails, CURRENT_INSTANCE, HOST_CTX,
 };
-use crate::trapcode::TrapCode;
 use failure::Error;
 use lazy_static::lazy_static;
 use libc::{c_int, c_void, siginfo_t};
+use lucet_module_data::TrapCode;
 use nix::sys::signal::{
     pthread_sigmask, raise, sigaction, SaFlags, SigAction, SigHandler, SigSet, SigmaskHow, Signal,
 };

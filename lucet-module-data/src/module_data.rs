@@ -2,18 +2,24 @@ use crate::{
     globals::GlobalSpec,
     linear_memory::{HeapSpec, LinearMemorySpec, SparseData},
     functions::FunctionSpec,
+    traps::TrapManifestRecord,
     Error,
 };
 use serde::{Deserialize, Serialize};
 
 pub struct Object<'a> {
     module_data: ModuleData<'a>,
+    trap_manifest: &'a [TrapManifestRecord],
     functions: &'a [FunctionSpec],
 }
 
 impl <'a> Object<'a> {
-    pub fn new(module_data: ModuleData<'a>, functions: &'a [FunctionSpec]) -> Self {
-        Self { module_data, functions }
+    pub fn new(
+        module_data: ModuleData<'a>,
+        trap_manifest: &'a [TrapManifestRecord],
+        functions: &'a [FunctionSpec]
+    ) -> Self {
+        Self { module_data, trap_manifest, functions }
     }
 
     pub fn function_index_for(&self, rip: u64) -> Option<usize> {

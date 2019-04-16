@@ -73,9 +73,6 @@ impl DlModule {
             std::ptr::null()
         };
 
-        /*
-         * TODO: load up the function manifest
-         */
         let function_manifest = unsafe {
             let manifest_len_ptr = lib.get::<*const u32>(b"lucet_function_manifest_len");
             let manifest_ptr = lib.get::<*const FunctionSpec>(b"lucet_function_manifest");

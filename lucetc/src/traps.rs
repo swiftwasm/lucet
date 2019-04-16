@@ -74,7 +74,7 @@ pub fn write_trap_manifest(manifest: &FaerieTrapManifest, obj: &mut Artifact) ->
             traps.write_u32::<LittleEndian>(site.offset as u32).unwrap();
             // write serialized trap code into trap table
             traps
-                .write_u32::<LittleEndian>(serialize_trapcode(site.code))
+                .write_u32::<LittleEndian>(translate_trapcode(site.code) as u32)
                 .unwrap();
         }
 
@@ -109,19 +109,19 @@ fn trap_sym_for_func(sym: &str) -> String {
 //
 // Not all types have subtypes. Currently, only the user User type has a
 // subtype.
-fn serialize_trapcode(code: ir::TrapCode) -> u32 {
+fn translate_trapcode(code: ir::TrapCode) -> lucet_module_data::TrapCode {
     match code {
-        ir::TrapCode::StackOverflow => 0,
-        ir::TrapCode::HeapOutOfBounds => 1,
-        ir::TrapCode::OutOfBounds => 2,
-        ir::TrapCode::IndirectCallToNull => 3,
-        ir::TrapCode::BadSignature => 4,
-        ir::TrapCode::IntegerOverflow => 5,
-        ir::TrapCode::IntegerDivisionByZero => 6,
-        ir::TrapCode::BadConversionToInteger => 7,
-        ir::TrapCode::Interrupt => 8,
-        ir::TrapCode::TableOutOfBounds => 9,
-        ir::TrapCode::UnreachableCodeReached => 10 as u32,
+        ir::TrapCode::StackOverflow => lucet_module_data::TrapCode::StackOverflow,
+        ir::TrapCode::HeapOutOfBounds => lucet_module_data::TrapCode::HeapOutOfBounds,
+        ir::TrapCode::OutOfBounds => lucet_module_data::TrapCode::OutOfBounds,
+        ir::TrapCode::IndirectCallToNull => lucet_module_data::TrapCode::IndirectCallToNull,
+        ir::TrapCode::BadSignature => lucet_module_data::TrapCode::BadSignature,
+        ir::TrapCode::IntegerOverflow => lucet_module_data::TrapCode::IntegerOverflow,
+        ir::TrapCode::IntegerDivisionByZero => lucet_module_data::TrapCode::IntegerDivByZero,
+        ir::TrapCode::BadConversionToInteger => lucet_module_data::TrapCode::BadConversionToInteger,
+        ir::TrapCode::Interrupt => lucet_module_data::TrapCode::Interrupt,
+        ir::TrapCode::TableOutOfBounds => lucet_module_data::TrapCode::TableOutOfBounds,
+        ir::TrapCode::UnreachableCodeReached => lucet_module_data::TrapCode::Unreachable,
         ir::TrapCode::User(_) => panic!("we should never emit a user trapcode"),
     }
 }

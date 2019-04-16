@@ -143,8 +143,9 @@
 //! signal handler increments a counter of signals it has seen before setting the fault state:
 //!
 //! ```no_run
+//! use lucet_module_data::TrapCode;
 //! use lucet_runtime::{
-//!     DlModule, Error, Instance, Limits, MmapRegion, Region, SignalBehavior, TrapCode
+//!     DlModule, Error, Instance, Limits, MmapRegion, Region, SignalBehavior
 //! };
 //! use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 //!

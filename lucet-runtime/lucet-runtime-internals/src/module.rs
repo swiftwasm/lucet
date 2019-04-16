@@ -5,62 +5,12 @@ mod sparse_page_data;
 
 pub use crate::module::dl::DlModule;
 pub use crate::module::mock::MockModuleBuilder;
-pub use lucet_module_data::{Global, GlobalSpec, HeapSpec};
+pub use lucet_module_data::{Global, GlobalSpec, HeapSpec, TrapCode, TrapManifestRecord};
 
 use crate::alloc::Limits;
 use crate::error::Error;
-use crate::trapcode::TrapCode;
 use libc::c_void;
 use std::slice::from_raw_parts;
-
-#[repr(C)]
-#[derive(Clone, Debug)]
-pub struct TrapManifestRecord {
-    pub func_addr: u64,
-    pub func_len: u64,
-    pub table_addr: u64,
-    pub table_len: u64,
-}
-
-impl TrapManifestRecord {
-    pub fn contains_addr(&self, addr: *const c_void) -> bool {
-        let addr = addr as u64;
-        // TODO: is this correct? off-by-one error?
-        addr >= self.func_addr && addr <= self.func_addr + self.func_len
-    }
-
-    pub fn trapsites(&self) -> &[TrapSite] {
-        let table_addr = self.table_addr as *const TrapSite;
-        assert!(!table_addr.is_null());
-        unsafe { from_raw_parts(table_addr, self.table_len as usize) }
-    }
-
-    pub fn lookup_addr(&self, addr: *const c_void) -> Option<TrapCode> {
-        if !self.contains_addr(addr) {
-            return None;
-        }
-
-        // predicate to find the trapsite for the addr via binary search
-        let f =
-            |ts: &TrapSite| (self.func_addr as usize + ts.offset as usize).cmp(&(addr as usize));
-
-        let trapsites = self.trapsites();
-        if let Ok(i) = trapsites.binary_search_by(f) {
-            let trapcode =
-                TrapCode::try_from_u32(trapsites[i].trapcode).expect("valid trapcode value");
-            Some(trapcode)
-        } else {
-            None
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug)]
-pub struct TrapSite {
-    pub offset: u32,
-    pub trapcode: u32,
-}
 
 #[repr(C)]
 #[derive(Clone, Debug)]
