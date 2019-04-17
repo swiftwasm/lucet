@@ -676,6 +676,7 @@ version = "0.1.0"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lucet-module-data 0.1.0",
  "lucet-runtime 0.1.0",
  "lucetc 0.1.0",
  "serde 1.0.90 (registry+https://github.com/rust-lang/crates.io-index)",
