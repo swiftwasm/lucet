@@ -314,7 +314,7 @@ pub fn write_function_manifest(
     for sink in manifest.sinks.iter() {
         function_manifest.push(FunctionSpec::new(
             0, // TODO: This is a lie. We don't have function address information at this point.
-            sink.code_size as u64,
+            sink.code_size,
         ));
 
         obj.link(Link {

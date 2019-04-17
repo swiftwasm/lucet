@@ -48,36 +48,35 @@ pub struct TrapTable<'a> {
     traps: &'a [TrapSite]
 }
 
+// TrapManifestRecord's layout here is very specific!
+// `table_addr` is the first field to significantly simplify
+// serialization and deserialization to an artifact. In
+// paticular, it is a pointer to some other table that will
+// be written out somewhere, with a relocation placed on this
+// field.
+//
+// I don't know of a robust way to find the offset of a field
+// in a struct (even a repr(C) struct), so the easiest
+// solution is to have it at offset 0.
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct TrapManifestRecord {
-    pub func_addr: u64,
-    pub func_len: u64,
     pub table_addr: u64,
     pub table_len: u64,
+    pub func_index: u32,
 }
 
 impl TrapManifestRecord {
-    pub fn contains_addr(&self, addr: *const c_void) -> bool {
-        let addr = addr as u64;
-        // TODO: is this correct? off-by-one error?
-        addr >= self.func_addr && addr <= self.func_addr + self.func_len
-    }
-
     pub fn trapsites(&self) -> &[TrapSite] {
         let table_addr = self.table_addr as *const TrapSite;
         assert!(!table_addr.is_null());
         unsafe { from_raw_parts(table_addr, self.table_len as usize) }
     }
 
-    pub fn lookup_addr(&self, addr: *const c_void) -> Option<TrapCode> {
-        if !self.contains_addr(addr) {
-            return None;
-        }
-
+    pub fn lookup_addr(&self, addr: u32) -> Option<TrapCode> {
         // predicate to find the trapsite for the addr via binary search
         let f =
-            |ts: &TrapSite| (self.func_addr as usize + ts.offset as usize).cmp(&(addr as usize));
+            |ts: &TrapSite| ts.offset.cmp(&addr);
 
         let trapsites = self.trapsites();
         if let Ok(i) = trapsites.binary_search_by(f) {

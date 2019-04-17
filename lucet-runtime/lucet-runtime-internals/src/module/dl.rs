@@ -225,6 +225,10 @@ impl ModuleInternal for DlModule {
         self.trap_manifest
     }
 
+    fn function_manifest(&self) -> &[FunctionSpec] {
+        self.function_manifest
+    }
+
     fn addr_details(&self, addr: *const c_void) -> Result<Option<AddrDetails>, Error> {
         if let Some(dli) = dladdr(addr) {
             let file_name = if dli.dli_fname.is_null() {

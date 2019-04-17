@@ -1,5 +1,5 @@
 use crate::helpers::MockModuleBuilder;
-use lucet_module_data::{TrapCode, TrapManifestRecord, TrapSite};
+use lucet_module_data::{FunctionSpec, TrapCode, TrapManifestRecord, TrapSite};
 use lucet_runtime_internals::module::Module;
 use lucet_runtime_internals::vmctx::{lucet_vmctx, Vmctx};
 use std::sync::Arc;
@@ -79,16 +79,26 @@ pub fn mock_traps_module() -> Arc<dyn Module> {
         code: TrapCode::HeapOutOfBounds,
     }];
 
+    let function_manifest = &[
+        FunctionSpec::new(
+            guest_func_illegal_instr as *const extern "C" fn() as u64,
+            11,
+        ),
+        FunctionSpec::new(guest_func_oob as *const extern "C" fn() as u64, 41),
+    ];
+
     let trap_manifest = &[
+        // This is the trap manifest for `guest_func_illegal_instr`.
+        // `func_index` MUST match the index of the corresponding FunctionSpec
         TrapManifestRecord {
-            func_addr: guest_func_illegal_instr as *const extern "C" fn() as u64,
-            func_len: 11,
+            func_index: 0,
             table_addr: ILLEGAL_INSTR_TRAPS.as_ptr() as u64,
             table_len: 1,
         },
+        // This is the trap manifest for `guest_func_oob`.
+        // `func_index` MUST match the index of the corresponding FunctionSpec
         TrapManifestRecord {
-            func_addr: guest_func_oob as *const extern "C" fn() as u64,
-            func_len: 41,
+            func_index: 1,
             table_addr: OOB_TRAPS.as_ptr() as u64,
             table_len: 1,
         },
@@ -108,6 +118,7 @@ pub fn mock_traps_module() -> Arc<dyn Module> {
             b"recoverable_fatal",
             recoverable_fatal as *const extern "C" fn(),
         )
+        .with_function_manifest(function_manifest)
         .with_trap_manifest(trap_manifest)
         .build()
 }

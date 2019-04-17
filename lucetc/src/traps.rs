@@ -4,6 +4,7 @@ use cranelift_faerie::traps::FaerieTrapManifest;
 use byteorder::{LittleEndian, WriteBytesExt};
 use faerie::{Artifact, Decl, Link};
 use failure::{Error, ResultExt};
+use lucet_module_data::{TrapManifestRecord, TrapSite};
 use std::io::Cursor;
 
 pub fn write_trap_manifest(manifest: &FaerieTrapManifest, obj: &mut Artifact) -> Result<(), Error> {
@@ -16,6 +17,8 @@ pub fn write_trap_manifest(manifest: &FaerieTrapManifest, obj: &mut Artifact) ->
     obj.declare(&manifest_sym, Decl::data().global())
         .context(format!("declaring {}", &manifest_sym))?;
 
+    let manifest_row_size = std::mem::size_of::<TrapManifestRecord>();
+
     let manifest_len = manifest.sinks.len();
     let mut manifest_len_buf: Vec<u8> = Vec::new();
     manifest_len_buf
@@ -24,66 +27,58 @@ pub fn write_trap_manifest(manifest: &FaerieTrapManifest, obj: &mut Artifact) ->
     obj.define(&manifest_len_sym, manifest_len_buf)
         .context(format!("defining {}", &manifest_len_sym))?;
 
-    // Manifests are serialized with the following struct elements in order:
-    // { func_start: ptr, func_len: u64, traps: ptr, traps_len: u64 }
-    let manifest_row_size = 8 * 4;
-    let mut manifest_buf: Cursor<Vec<u8>> =
-        Cursor::new(Vec::with_capacity(manifest_len * manifest_row_size));
+    let mut trap_manifest: Vec<TrapManifestRecord> = vec![];
 
-    for sink in manifest.sinks.iter() {
+    for (i, sink) in manifest.sinks.iter().enumerate() {
+        trap_manifest.push(TrapManifestRecord {
+            table_addr: 0, // This will have a relocation
+            table_len: sink.sites.len() as u64,
+            func_index: i as u32,
+        });
+
         let func_sym = &sink.name;
         let trap_sym = trap_sym_for_func(func_sym);
 
-        // declare function-level trap table
         obj.declare(&trap_sym, Decl::data().global())
             .context(format!("declaring {}", &trap_sym))?;
-
-        // function symbol is provided via a link (abs8 relocation)
-        obj.link(Link {
-            from: &manifest_sym,
-            to: func_sym,
-            at: manifest_buf.position(),
-        })
-        .context("linking function sym into trap manifest")?;
-        manifest_buf.write_u64::<LittleEndian>(0).unwrap();
-
-        // write function length
-        manifest_buf
-            .write_u64::<LittleEndian>(sink.code_size as u64)
-            .unwrap();
 
         // table for this function is provided via a link (abs8 relocation)
         obj.link(Link {
             from: &manifest_sym,
             to: &trap_sym,
-            at: manifest_buf.position(),
+            at: (i * std::mem::size_of::<TrapManifestRecord>()) as u64,
         })
         .context("linking trap table into trap manifest")?;
-        manifest_buf.write_u64::<LittleEndian>(0).unwrap();
-
-        // finally, write the length of the trap table
-        manifest_buf
-            .write_u64::<LittleEndian>(sink.sites.len() as u64)
-            .unwrap();
 
         // ok, now write the actual function-level trap table
-        let mut traps: Vec<u8> = Vec::new();
+        let traps: Vec<TrapSite> = sink
+            .sites
+            .iter()
+            .map(|site| TrapSite {
+                offset: site.offset,
+                code: translate_trapcode(site.code),
+            })
+            .collect();
+        let trap_site_bytes = unsafe {
+            std::slice::from_raw_parts(
+                traps.as_ptr() as *const u8,
+                traps.len() * std::mem::size_of::<TrapSite>(),
+            )
+        };
 
-        for site in sink.sites.iter() {
-            // write offset into trap table
-            traps.write_u32::<LittleEndian>(site.offset as u32).unwrap();
-            // write serialized trap code into trap table
-            traps
-                .write_u32::<LittleEndian>(translate_trapcode(site.code) as u32)
-                .unwrap();
-        }
-
-        // and finally write the function trap table into the object
-        obj.define(&trap_sym, traps)
+        // and write the function trap table into the object
+        obj.define(&trap_sym, trap_site_bytes.to_vec())
             .context(format!("defining {}", &trap_sym))?;
     }
 
-    obj.define(&manifest_sym, manifest_buf.into_inner())
+    let trap_manifest_bytes = unsafe {
+        std::slice::from_raw_parts(
+            trap_manifest.as_ptr() as *const u8,
+            trap_manifest.len() * std::mem::size_of::<TrapManifestRecord>(),
+        )
+    };
+
+    obj.define(&manifest_sym, trap_manifest_bytes.to_vec())
         .context(format!("defining {}", &manifest_sym))?;
 
     // iterate over tables:

@@ -5,7 +5,9 @@ mod sparse_page_data;
 
 pub use crate::module::dl::DlModule;
 pub use crate::module::mock::MockModuleBuilder;
-pub use lucet_module_data::{Global, GlobalSpec, HeapSpec, TrapCode, TrapManifestRecord};
+pub use lucet_module_data::{
+    FunctionSpec, Global, GlobalSpec, HeapSpec, TrapCode, TrapManifestRecord,
+};
 
 use crate::alloc::Limits;
 use crate::error::Error;
@@ -67,6 +69,8 @@ pub trait ModuleInternal: Send + Sync {
 
     fn trap_manifest(&self) -> &[TrapManifestRecord];
 
+    fn function_manifest(&self) -> &[FunctionSpec];
+
     fn addr_details(&self, addr: *const c_void) -> Result<Option<AddrDetails>, Error>;
 
     /// Look up an instruction pointer in the trap manifest.
@@ -74,15 +78,17 @@ pub trait ModuleInternal: Send + Sync {
     /// This function must be signal-safe.
     fn lookup_trapcode(&self, rip: *const c_void) -> Option<TrapCode> {
         for record in self.trap_manifest() {
-            if record.contains_addr(rip) {
-                // the trap falls within a known function
-                if let Some(trapcode) = record.lookup_addr(rip) {
-                    return Some(trapcode);
-                } else {
-                    // stop looking through the rest of the trap manifests; only one function should
-                    // ever match
-                    break;
-                }
+            let fn_spec = self
+                .function_manifest()
+                .get(record.func_index as usize)
+                .expect("trap manifest function index is valid");
+
+            if let Some(offset) = fn_spec.relative_addr(rip as u64) {
+                // the address falls in this trap manifest's function.
+                // `rip` can only lie in one function, so either
+                // there's a trap site in this manifest, and that's
+                // the one we want, or there's none
+                return record.lookup_addr(offset);
             }
         }
         None
