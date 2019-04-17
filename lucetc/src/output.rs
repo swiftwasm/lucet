@@ -1,10 +1,10 @@
 use crate::function::write_function_manifest;
 use crate::name::Name;
 use crate::stack_probe;
-use crate::traps::write_trap_manifest;
+use crate::traps::write_trap_tables;
 use cranelift_codegen::{ir, isa};
 use cranelift_faerie::FaerieProduct;
-use faerie::Artifact;
+use faerie::{Artifact, Decl};
 use failure::{format_err, Error, ResultExt};
 use std::collections::HashMap;
 use std::fs::File;
@@ -35,6 +35,35 @@ impl CraneliftFuncs {
     }
 }
 
+fn write_code_metadata(
+    code_metadata: &lucet_module_data::CodeMetadata,
+    output: &mut Artifact,
+) -> Result<(), Error> {
+    use byteorder::LittleEndian;
+    use byteorder::WriteBytesExt;
+    let serialized_metadata = code_metadata.serialize()?;
+
+    let mut metadata_len_buf: Vec<u8> = Vec::new();
+    metadata_len_buf
+        .write_u32::<LittleEndian>(serialized_metadata.len() as u32)
+        .unwrap();
+    output
+        .declare("lucet_code_metadata_len", Decl::data().global())
+        .context("declaring lucet_code_metadata_len")?;
+    output
+        .define("lucet_code_metadata_len", metadata_len_buf)
+        .context("defining lucet_code_metadata_len")?;
+
+    output
+        .declare("lucet_code_metadata", Decl::data().global())
+        .context("declaring lucet_code_metadata")?;
+    output
+        .define("lucet_code_metadata", serialized_metadata)
+        .context("defining lucet_code_metadata")?;
+
+    Ok(())
+}
+
 pub struct ObjectFile {
     artifact: Artifact,
 }
@@ -53,7 +82,13 @@ impl ObjectFile {
         // available, `write_function_manifest` should take the function manifest, rather
         // than compute it
         let function_manifest = write_function_manifest(trap_manifest, &mut product.artifact)?;
-        write_trap_manifest(trap_manifest, &mut product.artifact)?;
+        let internal_trap_manifest = write_trap_tables(trap_manifest, &mut product.artifact)?;
+
+        let code_metadata = lucet_module_data::CodeMetadata {
+            trap_manifest: internal_trap_manifest,
+        };
+
+        write_code_metadata(&code_metadata, &mut product.artifact)?;
         Ok(Self {
             artifact: product.artifact,
         })

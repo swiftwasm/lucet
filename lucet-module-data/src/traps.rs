@@ -2,7 +2,6 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 
-use std::ffi::c_void;
 use std::slice::from_raw_parts;
 
 /// The type of a WebAssembly
@@ -41,25 +40,8 @@ pub struct TrapSite {
     pub code: TrapCode
 }
 
-/// Trap information for an address in a compiled function
 #[repr(C)]
-pub struct TrapTable<'a> {
-    function: u32, // TODO: what type for function indices - u32? usize? u64?
-    traps: &'a [TrapSite]
-}
-
-// TrapManifestRecord's layout here is very specific!
-// `table_addr` is the first field to significantly simplify
-// serialization and deserialization to an artifact. In
-// paticular, it is a pointer to some other table that will
-// be written out somewhere, with a relocation placed on this
-// field.
-//
-// I don't know of a robust way to find the offset of a field
-// in a struct (even a repr(C) struct), so the easiest
-// solution is to have it at offset 0.
-#[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TrapManifestRecord {
     pub table_addr: u64,
     pub table_len: u64,

@@ -1,37 +1,9 @@
 use crate::{
     globals::GlobalSpec,
     linear_memory::{HeapSpec, LinearMemorySpec, SparseData},
-    functions::FunctionSpec,
-    traps::TrapManifestRecord,
     Error,
 };
 use serde::{Deserialize, Serialize};
-
-pub struct Object<'a> {
-    module_data: ModuleData<'a>,
-    trap_manifest: &'a [TrapManifestRecord],
-    functions: &'a [FunctionSpec],
-}
-
-impl <'a> Object<'a> {
-    pub fn new(
-        module_data: ModuleData<'a>,
-        trap_manifest: &'a [TrapManifestRecord],
-        functions: &'a [FunctionSpec]
-    ) -> Self {
-        Self { module_data, trap_manifest, functions }
-    }
-
-    pub fn function_index_for(&self, rip: u64) -> Option<usize> {
-        for (idx, function) in self.functions.iter().enumerate() {
-            if function.contains(rip) {
-                // Assume functions do not overlap
-                return Some(idx);
-            }
-        }
-        None
-    }
-}
 
 /// The metadata (and some data) for a Lucet module.
 ///
@@ -80,7 +52,7 @@ impl<'a> ModuleData<'a> {
         &self.globals_spec
     }
 
-    /// Serialize to (https://github.com/TyOverby/bincode).
+    /// Serialize to [`bincode`](https://github.com/TyOverby/bincode).
     pub fn serialize(&self) -> Result<Vec<u8>, Error> {
         bincode::serialize(self).map_err(Error::SerializationError)
     }

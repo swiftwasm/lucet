@@ -4,7 +4,7 @@ use crate::module::{
 };
 use libc::c_void;
 use libloading::{Library, Symbol};
-use lucet_module_data::{FunctionSpec, ModuleData};
+use lucet_module_data::{CodeMetadata, FunctionSpec, ModuleData};
 use std::ffi::CStr;
 use std::mem;
 use std::path::Path;
@@ -22,7 +22,7 @@ pub struct DlModule {
     /// Metadata decoded from inside the module
     module_data: ModuleData<'static>,
 
-    trap_manifest: &'static [TrapManifestRecord],
+    code_metadata: CodeMetadata,
 
     function_manifest: &'static [FunctionSpec],
 }
@@ -73,6 +73,28 @@ impl DlModule {
             std::ptr::null()
         };
 
+        let code_metadata_ptr = unsafe {
+            lib.get::<*const u8>(b"lucet_code_metadata").map_err(|e| {
+                lucet_incorrect_module!(
+                    "error loading required symbol `lucet_code_metadata`: {}",
+                    e
+                )
+            })?
+        };
+
+        let code_metadata_len = unsafe {
+            lib.get::<usize>(b"lucet_code_metadata_len").map_err(|e| {
+                lucet_incorrect_module!(
+                    "error loading required symbol `lucet_code_metadata_len`: {}",
+                    e
+                )
+            })?
+        };
+
+        let code_metadata_slice: &'static [u8] =
+            unsafe { slice::from_raw_parts(*code_metadata_ptr, *code_metadata_len) };
+        let mut code_metadata = CodeMetadata::deserialize(code_metadata_slice)?;
+
         let function_manifest = unsafe {
             let manifest_len_ptr = lib.get::<*const u32>(b"lucet_function_manifest_len");
             let manifest_ptr = lib.get::<*const FunctionSpec>(b"lucet_function_manifest");
@@ -88,6 +110,7 @@ impl DlModule {
 
                     from_raw_parts(manifest, *manifest_len as usize)
                 }
+                // TODO: Can a module be data-only?
                 (Err(_), Err(_)) => &[],
                 (Ok(_), Err(e)) => {
                     return Err(lucet_incorrect_module!(
@@ -104,31 +127,51 @@ impl DlModule {
             }
         };
 
-        let trap_manifest = unsafe {
-            if let Ok(len_ptr) = lib.get::<*const u32>(b"lucet_trap_manifest_len") {
-                let len = len_ptr.as_ref().ok_or(lucet_incorrect_module!(
-                    "`lucet_trap_manifest_len` is defined but null"
-                ))?;
-                let records = lib
-                    .get::<*const TrapManifestRecord>(b"lucet_trap_manifest")
-                    .map_err(|e| {
-                        lucet_incorrect_module!("error loading symbol `lucet_trap_manifest`: {}", e)
-                    })?
-                    .as_ref()
+        // Now that we have a function manifest, we can fix up table_addr values in
+        // the trap manifest, which should point to the table in a readonly section
+
+        for (idx, record) in code_metadata.trap_manifest.iter_mut().enumerate() {
+            let function = function_manifest.get(record.func_index as usize).ok_or(
+                lucet_incorrect_module!(
+                    "trap manifest includes an invalid function index: {}",
+                    record.func_index,
+                ),
+            )?;
+            let fn_name = unsafe {
+                let name_ptr = dladdr(function.addr as *const c_void)
                     .ok_or(lucet_incorrect_module!(
-                        "`lucet_trap_manifest` is defined but null"
-                    ))?;
-                from_raw_parts(records, *len as usize)
-            } else {
-                &[]
-            }
-        };
+                        "no symbol for function at {:#016x}",
+                        function.addr,
+                    ))?
+                    .dli_sname;
+
+                if name_ptr.is_null() {
+                    return Err(lucet_incorrect_module!(
+                        "symbol name for {:#016x} is null",
+                        function.addr,
+                    ));
+                } else {
+                    CStr::from_ptr(name_ptr).to_owned().into_string()?
+                }
+            };
+            let trap_sym = format!("lucet_trap_table_{}", fn_name);
+            let trap_manifest_ptr = unsafe {
+                lib.get::<u64>(trap_sym.as_bytes()).map_err(|e| {
+                    lucet_incorrect_module!(
+                        "trap manifest exists for function `{}` but there was an error loading the trap manifest: {}",
+                        trap_sym,
+                        e,
+                    )
+                })?
+            };
+            record.table_addr = *trap_manifest_ptr;
+        }
 
         Ok(Arc::new(DlModule {
             lib,
             fbase,
             module_data,
-            trap_manifest,
+            code_metadata,
             function_manifest,
         }))
     }
@@ -222,7 +265,7 @@ impl ModuleInternal for DlModule {
     }
 
     fn trap_manifest(&self) -> &[TrapManifestRecord] {
-        self.trap_manifest
+        &self.code_metadata.trap_manifest
     }
 
     fn function_manifest(&self) -> &[FunctionSpec] {

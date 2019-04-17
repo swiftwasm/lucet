@@ -12,7 +12,6 @@ pub use lucet_module_data::{
 use crate::alloc::Limits;
 use crate::error::Error;
 use libc::c_void;
-use std::slice::from_raw_parts;
 
 #[repr(C)]
 #[derive(Clone, Debug)]

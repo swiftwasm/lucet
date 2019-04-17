@@ -3,6 +3,7 @@
 //! These types are used both in `lucetc` and `lucet-runtime`, with values serialized in
 //! [`bincode`](https://github.com/TyOverby/bincode) format to the compiled Lucet modules.
 
+mod code_metadata;
 mod error;
 mod functions;
 mod globals;
@@ -10,6 +11,7 @@ mod linear_memory;
 mod module_data;
 mod traps;
 
+pub use crate::code_metadata::CodeMetadata;
 pub use crate::error::Error;
 pub use crate::globals::{Global, GlobalDef, GlobalSpec};
 pub use crate::linear_memory::{HeapSpec, SparseData, LinearMemorySpec};

@@ -113,7 +113,7 @@ impl<'a> ModuleDecls<'a> {
                 if exportable_sigix.export_names.is_empty() {
                     let def_symbol = format!("guest_func_{}", ix);
                     let funcid = clif_module
-                        .declare_function(&def_symbol, Linkage::Local, signature)
+                        .declare_function(&def_symbol, Linkage::Export, signature)
                         .context(LucetcErrorKind::TranslatingModule)?;
                     Name::new_func(def_symbol, funcid)
                 } else {

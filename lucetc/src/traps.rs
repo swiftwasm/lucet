@@ -1,37 +1,19 @@
 use cranelift_codegen::ir;
 use cranelift_faerie::traps::FaerieTrapManifest;
 
-use byteorder::{LittleEndian, WriteBytesExt};
-use faerie::{Artifact, Decl, Link};
+use faerie::{Artifact, Decl};
 use failure::{Error, ResultExt};
 use lucet_module_data::{TrapManifestRecord, TrapSite};
-use std::io::Cursor;
 
-pub fn write_trap_manifest(manifest: &FaerieTrapManifest, obj: &mut Artifact) -> Result<(), Error> {
-    // declare traptable symbol
-    let manifest_len_sym = "lucet_trap_manifest_len";
-    obj.declare(&manifest_len_sym, Decl::data().global())
-        .context(format!("declaring {}", &manifest_len_sym))?;
-
-    let manifest_sym = "lucet_trap_manifest";
-    obj.declare(&manifest_sym, Decl::data().global())
-        .context(format!("declaring {}", &manifest_sym))?;
-
-    let manifest_row_size = std::mem::size_of::<TrapManifestRecord>();
-
-    let manifest_len = manifest.sinks.len();
-    let mut manifest_len_buf: Vec<u8> = Vec::new();
-    manifest_len_buf
-        .write_u32::<LittleEndian>(manifest_len as u32)
-        .unwrap();
-    obj.define(&manifest_len_sym, manifest_len_buf)
-        .context(format!("defining {}", &manifest_len_sym))?;
-
-    let mut trap_manifest: Vec<TrapManifestRecord> = vec![];
+pub fn write_trap_tables(
+    manifest: &FaerieTrapManifest,
+    obj: &mut Artifact,
+) -> Result<Vec<TrapManifestRecord>, Error> {
+    let mut trap_manifest: Vec<TrapManifestRecord> = Vec::with_capacity(manifest.sinks.len());
 
     for (i, sink) in manifest.sinks.iter().enumerate() {
         trap_manifest.push(TrapManifestRecord {
-            table_addr: 0, // This will have a relocation
+            table_addr: 0, // This will be fixed up when loaded
             table_len: sink.sites.len() as u64,
             func_index: i as u32,
         });
@@ -42,15 +24,7 @@ pub fn write_trap_manifest(manifest: &FaerieTrapManifest, obj: &mut Artifact) ->
         obj.declare(&trap_sym, Decl::data().global())
             .context(format!("declaring {}", &trap_sym))?;
 
-        // table for this function is provided via a link (abs8 relocation)
-        obj.link(Link {
-            from: &manifest_sym,
-            to: &trap_sym,
-            at: (i * std::mem::size_of::<TrapManifestRecord>()) as u64,
-        })
-        .context("linking trap table into trap manifest")?;
-
-        // ok, now write the actual function-level trap table
+        // write the actual function-level trap table
         let traps: Vec<TrapSite> = sink
             .sites
             .iter()
@@ -59,6 +33,7 @@ pub fn write_trap_manifest(manifest: &FaerieTrapManifest, obj: &mut Artifact) ->
                 code: translate_trapcode(site.code),
             })
             .collect();
+
         let trap_site_bytes = unsafe {
             std::slice::from_raw_parts(
                 traps.as_ptr() as *const u8,
@@ -71,26 +46,7 @@ pub fn write_trap_manifest(manifest: &FaerieTrapManifest, obj: &mut Artifact) ->
             .context(format!("defining {}", &trap_sym))?;
     }
 
-    let trap_manifest_bytes = unsafe {
-        std::slice::from_raw_parts(
-            trap_manifest.as_ptr() as *const u8,
-            trap_manifest.len() * std::mem::size_of::<TrapManifestRecord>(),
-        )
-    };
-
-    obj.define(&manifest_sym, trap_manifest_bytes.to_vec())
-        .context(format!("defining {}", &manifest_sym))?;
-
-    // iterate over tables:
-    //   write empty relocation thunk
-    //   link from traptable symbol + thunk offset to function symbol
-    //   write trapsite count
-    //
-    //   iterate over trapsites:
-    //     write offset
-    //     write trapcode
-
-    Ok(())
+    Ok(trap_manifest)
 }
 
 fn trap_sym_for_func(sym: &str) -> String {

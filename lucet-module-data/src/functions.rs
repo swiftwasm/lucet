@@ -1,7 +1,7 @@
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct FunctionSpec {
-    addr: u64,
+    pub addr: u64,
     len: u32,
 }
 
