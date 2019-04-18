@@ -7,6 +7,8 @@ use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_faerie::traps::FaerieTrapManifest;
+use cranelift_faerie::FaerieBackend;
+use cranelift_module::ModuleFunction;
 use cranelift_wasm::{
     FuncEnvironment, FuncIndex, GlobalIndex, GlobalVariable, MemoryIndex, SignatureIndex,
     TableIndex, WasmResult,
@@ -267,20 +269,10 @@ impl<'a> FuncEnvironment for FuncInfo<'a> {
 ///
 /// Writes a manifest of functions, with relocations, to the artifact.
 ///
-/// THIS IS NOT CURRENTLY A COMPLETE LIST OF FUNCTIONS.
-///
-/// Currently the manifest returned here is the subset of functions
-/// that happen to have traps. This manifest is only used, right now,
-/// to look up trap manifest mappings, so this all lines up.
-///
-/// The *order* of these functions are not (currently) guaranteed either!
-/// Just that at the moment this order happens to be the same order as
-/// `FaerieTrapManifest` lists.
-///
 pub fn write_function_manifest(
-    manifest: &FaerieTrapManifest,
+    functions: &Vec<(String, FunctionSpec)>,
     obj: &mut Artifact,
-) -> Result<Vec<FunctionSpec>, Error> {
+) -> Result<(), Error> {
     let manifest_len_sym = "lucet_function_manifest_len";
     obj.declare(&manifest_len_sym, Decl::data().global())
         .context(format!("declaring {}", &manifest_len_sym))?;
@@ -291,16 +283,14 @@ pub fn write_function_manifest(
 
     let mut manifest_len_buf: Vec<u8> = Vec::new();
     manifest_len_buf
-        .write_u32::<LittleEndian>(manifest.sinks.len() as u32)
+        .write_u32::<LittleEndian>(functions.len() as u32)
         .unwrap();
     obj.define(manifest_len_sym, manifest_len_buf)
         .context(format!("defining {}", &manifest_len_sym))?;
 
     let mut manifest_buf: Cursor<Vec<u8>> = Cursor::new(Vec::with_capacity(
-        manifest.sinks.len() * size_of::<FunctionSpec>(),
+        functions.len() * size_of::<FunctionSpec>(),
     ));
-
-    let mut function_manifest: Vec<FunctionSpec> = vec![];
 
     /*
      * !! This is brittle and should be suspect !!
@@ -311,27 +301,22 @@ pub fn write_function_manifest(
      *
      * If `addr` moves in `FunctionSpec`, this will break!
      */
-    for sink in manifest.sinks.iter() {
-        function_manifest.push(FunctionSpec::new(
-            0, // TODO: This is a lie. We don't have function address information at this point.
-            sink.code_size,
-        ));
-
+    for (func_name, func_spec) in functions.iter() {
         obj.link(Link {
             from: &manifest_sym,
-            to: &sink.name,
+            to: &func_name,
             at: manifest_buf.position(),
         })
         .context("linking function sym into function manifest")?;
 
         manifest_buf.write_u64::<LittleEndian>(0).unwrap();
         manifest_buf
-            .write_u64::<LittleEndian>(sink.code_size as u64)
+            .write_u64::<LittleEndian>(func_spec.len as u64)
             .unwrap();
     }
 
     obj.define(&manifest_sym, manifest_buf.into_inner())
         .context(format!("defining {}", &manifest_sym))?;
 
-    Ok(function_manifest)
+    Ok(())
 }

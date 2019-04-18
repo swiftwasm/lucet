@@ -3,9 +3,11 @@ use crate::name::Name;
 use crate::stack_probe;
 use crate::traps::write_trap_tables;
 use cranelift_codegen::{ir, isa};
-use cranelift_faerie::FaerieProduct;
+use cranelift_module::ModuleFunction;
+use cranelift_faerie::{FaerieBackend, FaerieProduct};
 use faerie::{Artifact, Decl};
 use failure::{format_err, Error, ResultExt};
+use lucet_module_data::FunctionSpec;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
@@ -68,21 +70,23 @@ pub struct ObjectFile {
     artifact: Artifact,
 }
 impl ObjectFile {
-    pub fn new(mut product: FaerieProduct) -> Result<Self, Error> {
+    pub fn new(mut product: FaerieProduct, mut function_manifest: Vec<(String, FunctionSpec)>) -> Result<Self, Error> {
         stack_probe::declare_and_define(&mut product)?;
+
+        // stack_probe::declare_and_define adds a new function into `product`, but
+        // function_manifest was already constructed from all defined functions -
+        // so we have to add a new entry to `function_manifest` for the stack probe
+        function_manifest.push((
+            stack_probe::STACK_PROBE_SYM.to_string(),
+            FunctionSpec::new(0, stack_probe::STACK_PROBE_BINARY.len() as u32)
+        ));
+
         let trap_manifest = &product
             .trap_manifest
             .expect("trap manifest will be present");
 
-        // TODO: at this moment there is no way to get a full list of functions and sizes
-        // at this point in compilation.
-        //
-        // For now, we need the list of functions with traps, which we can get here, and
-        // reuse that when writing out the trap manifest. When a full function list is
-        // available, `write_function_manifest` should take the function manifest, rather
-        // than compute it
-        let function_manifest = write_function_manifest(trap_manifest, &mut product.artifact)?;
-        let internal_trap_manifest = write_trap_tables(trap_manifest, &mut product.artifact)?;
+        write_function_manifest(&function_manifest, &mut product.artifact)?;
+        let internal_trap_manifest = write_trap_tables(trap_manifest, &function_manifest, &mut product.artifact)?;
 
         let code_metadata = lucet_module_data::CodeMetadata {
             trap_manifest: internal_trap_manifest,

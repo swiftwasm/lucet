@@ -1,21 +1,40 @@
 use cranelift_codegen::ir;
 use cranelift_faerie::traps::FaerieTrapManifest;
+use cranelift_faerie::FaerieBackend;
+use cranelift_module::ModuleFunction;
 
 use faerie::{Artifact, Decl};
 use failure::{Error, ResultExt};
-use lucet_module_data::{TrapManifestRecord, TrapSite};
+use lucet_module_data::{FunctionSpec, TrapManifestRecord, TrapSite};
 
 pub fn write_trap_tables(
     manifest: &FaerieTrapManifest,
+    functions: &Vec<(String, FunctionSpec)>,
     obj: &mut Artifact,
 ) -> Result<Vec<TrapManifestRecord>, Error> {
     let mut trap_manifest: Vec<TrapManifestRecord> = Vec::with_capacity(manifest.sinks.len());
 
-    for (i, sink) in manifest.sinks.iter().enumerate() {
+    for sink in manifest.sinks.iter() {
+        let func_index: usize = {
+            let mut trap_fn_index: Option<usize> = None;
+            for (i, (func_name, func_spec)) in functions.iter().enumerate() {
+                if func_name == &sink.name {
+                    trap_fn_index = Some(i);
+                    break;
+                }
+            }
+            trap_fn_index.unwrap_or_else(|| {
+                panic!(
+                    "Trap sink {} has no corresponding function in the function manifest. This should not be possible?",
+                    sink.name
+                )
+            })
+        };
+
         trap_manifest.push(TrapManifestRecord {
             table_addr: 0, // This will be fixed up when loaded
             table_len: sink.sites.len() as u64,
-            func_index: i as u32,
+            func_index: func_index as u32,
         });
 
         let func_sym = &sink.name;

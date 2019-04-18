@@ -2,7 +2,7 @@
 #[derive(Clone, Debug)]
 pub struct FunctionSpec {
     pub addr: u64,
-    len: u32,
+    pub len: u32,
 }
 
 impl FunctionSpec {
