@@ -15,8 +15,18 @@
         "fd_read": "__wasi_fd_read",
         "fd_seek": "__wasi_fd_seek",
         "fd_write": "__wasi_fd_write",
+        "fd_readdir": "__wasi_fd_readdir",
         "path_open": "__wasi_path_open",
+        "path_create_directory": "__wasi_path_create_directory",
+        "path_filestat_get": "__wasi_path_filestat_get",
+        "path_link": "__wasi_path_link",
+        "path_readlink": "__wasi_path_readlink",
+        "path_remove_directory": "__wasi_path_remove_directory",
+        "path_rename": "__wasi_path_rename",
+        "path_symlink": "__wasi_path_symlink",
+        "path_unlink_file": "__wasi_path_unlink_file",
         "poll_oneoff": "__wasi_poll_oneoff",
-        "random_get": "__wasi_random_get"
+        "random_get": "__wasi_random_get",
+        "sched_yield": "__wasi_sched_yield"
     }
 }

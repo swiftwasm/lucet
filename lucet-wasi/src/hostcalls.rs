@@ -560,6 +560,17 @@ pub extern "C" fn __wasi_fd_write(
 }
 
 #[no_mangle]
+pub extern "C" fn __wasi_fd_readdir(
+    vmctx: *mut lucet_vmctx,
+    fd: wasm32::__wasi_fd_t,
+    buf: wasm32::uintptr_t,
+    buf_len: wasm32::size_t,
+    cookie: wasm32::__wasi_dircookie_t,
+) -> wasm32::__wasi_errno_t {
+    panic!("Stub!");
+}
+
+#[no_mangle]
 pub extern "C" fn __wasi_path_open(
     vmctx: *mut lucet_vmctx,
     dirfd: wasm32::__wasi_fd_t,
@@ -970,6 +981,46 @@ pub fn path_get<P: AsRef<OsStr>>(
 }
 
 #[no_mangle]
+pub extern "C" fn __wasi_path_create_directory() {
+	panic!("Stub");
+}
+
+#[no_mangle]
+pub extern "C" fn __wasi_path_filestat_get() {
+	panic!("Stub");
+}
+
+#[no_mangle]
+pub extern "C" fn __wasi_path_link() {
+	panic!("Stub");
+}
+
+#[no_mangle]
+pub extern "C" fn __wasi_path_readlink() {
+	panic!("Stub");
+}
+
+#[no_mangle]
+pub extern "C" fn __wasi_path_remove_directory() {
+	panic!("Stub");
+}
+
+#[no_mangle]
+pub extern "C" fn __wasi_path_rename() {
+	panic!("Stub");
+}
+
+#[no_mangle]
+pub extern "C" fn __wasi_path_symlink() {
+	panic!("Stub");
+}
+
+#[no_mangle]
+pub extern "C" fn __wasi_path_unlink_file() {
+	panic!("Stub");
+}
+
+#[no_mangle]
 pub extern "C" fn __wasi_random_get(
     vmctx: *mut lucet_vmctx,
     buf_ptr: wasm32::uintptr_t,
@@ -1225,6 +1276,11 @@ pub extern "C" fn __wasi_poll_oneoff(
     }
     let events = fd_events.iter().zip(poll_fds.iter()).take(ready);
     __wasi_poll_oneoff_handle_fd_event(&mut vmctx, output_slice, nevents, events)
+}
+
+#[no_mangle]
+pub extern "C" fn __wasi_path_sched_yield() {
+	panic!("Stub");
 }
 
 #[doc(hidden)]
