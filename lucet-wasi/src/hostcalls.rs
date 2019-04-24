@@ -1279,7 +1279,7 @@ pub extern "C" fn __wasi_poll_oneoff(
 }
 
 #[no_mangle]
-pub extern "C" fn __wasi_path_sched_yield() {
+pub extern "C" fn __wasi_sched_yield() {
 	panic!("Stub");
 }
 
